@@ -12,6 +12,7 @@ wandb/
 runs/
 
 # generic logs and profiler outputs
+*.npy
 *.txt
 *.log
 *.out
@@ -24,6 +25,9 @@ HPST/
 
 # files
 test.py
+
+#plots
+*.png
 
 # allow keeping project metadata and config files (取消注释以保留)
 # !environment.yml

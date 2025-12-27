@@ -1,0 +1,1 @@
+CUDA_VISIBLE_DEVICES=0 nohup python scripts/train_homogenous.py --options_file "/home/houyh/Segmentation-JUNO/config/pst/pst_small_tune.json" --name "JUNO_run" --log_dir "runs" --gpus 1 > JUNO.log 2>&1 &

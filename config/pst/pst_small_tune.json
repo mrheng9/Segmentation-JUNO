@@ -1,0 +1,54 @@
+{  
+    "pointnet_patch_embed_depth": 1,
+    "pointnet_patch_embed_channels": 128,
+    "pointnet_num_heads": 16,
+    "pointnet_patch_embed_groups": 6,
+    "pointnet_patch_embed_neighbours": 8,
+    "pointnet_enc_depths": [2,2,6,2],
+    "pointnet_enc_channels": [96, 192, 384, 512],
+    "pointnet_enc_groups": [12, 24, 48, 64],
+    "pointnet_enc_neighbours": [8, 8, 8, 8],
+    "pointnet_dec_depths": [1, 1, 1, 1],
+    "pointnet_dec_channels": [48, 96, 192, 384],
+    "pointnet_dec_groups": [6, 12, 24, 48],
+    "pointnet_dec_neighbours": [8, 8, 8, 8],
+    "pointnet_grid_sizes": [0.06, 0.12, 0.24, 0.48],
+    "dropout": 0.2,
+  
+    "epochs": 15,
+    "batch_size": 10,
+    "optimizer": "AdamW",
+
+    "early_stop_patience": 5,
+    "early_stop_min_delta": 0.01,
+    "early_stop_monitor": "val_loss",
+    "early_stop_mode": "min",
+
+    "learning_rate": 0.0001,
+    "learning_rate_cycles": 1,
+    "learning_rate_warmup_epochs": 3.0,
+    "l2_penalty": 0.1,
+    "gradient_clip": 20.0,
+    "loss_gamma": 1.0,
+    "loss_beta": 0.9999999,
+  
+    "training_file": "/disk_pool1/houyh/data/mixed",
+
+    "train_validation_split": 0.85,
+    "test_split": 0.10,
+    "split_seed": 12345,
+
+    "juno_coords_path": "/disk_pool1/houyh/data/whichPixel_nside32_LCDpmts.npy",
+    "juno_vg_mm_per_ns": 190.0,
+    "juno_radius_mm": 19500.0,
+    "juno_neg_ratio": 1,
+    "juno_neg_cap": 8192,
+    "juno_rng_seed": 12345,
+
+    "num_dataloader_workers": 16,
+    "normalize_features": true,
+    "dataset_limit": 1.0,
+    "num_gpu": 1,
+    "verbose_output": true
+  }
+  

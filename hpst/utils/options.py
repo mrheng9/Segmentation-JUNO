@@ -30,8 +30,23 @@ class Options(Namespace):
         self.pointnet_dec_channels = [96, 192, 384]
         self.pointnet_dec_groups = [12, 24, 48]
         self.pointnet_dec_neighbours = [16, 16, 16]
-        self.pointnet_grid_sizes = [16, 32, 64]
-        self.dropout = 0.2
+        self.pointnet_grid_sizes = [0.06, 0.12, 0.24, 0.48]
+
+
+        # =========================================================================================
+        # JUNO Dataset Options (PMT segmentation)
+        # =========================================================================================
+        # PMT geometry table whichPixel_nside32_LCDpmts.npy
+        self.juno_coords_path: str = "/disk_pool1/houyh/data/whichPixel_nside32_LCDpmts.npy"
+
+        # group velocity in liquid scintillator (mm/ns). 1.90e8 m/s -> 190 mm/ns
+        self.juno_vg_mm_per_ns: float = 190.0
+        # radius scale for normalization (mm)
+        self.juno_radius_mm: float = 19500.0
+        # negative sampling controls (for target == (0,0))
+        self.juno_neg_ratio: int = 3
+        self.juno_neg_cap: int = 8192
+        self.juno_rng_seed: int = 12345
 
         # =========================================================================================
         # Dataset Options
@@ -44,8 +59,10 @@ class Options(Namespace):
         # Limit the dataset to the first images% of the data.
         self.dataset_limit: float = 1.0
 
-        # Percent of data to use for training vs. validation.
+        # Percent of data to use for training vsyua. validation.
         self.train_validation_split: float = 0.95
+        self.test_split: float = 0.0
+        self.split_seed: int = 12345
 
         # Training batch size.
         self.batch_size: int = 2048
@@ -73,7 +90,7 @@ class Options(Namespace):
         self.gradient_clip: float = 90.0
 
         # Dropout added to all layers.
-        self.dropout: float = 0.0
+        self.dropout: float = 0.2
 
         # Number of epochs to train for.
         self.epochs: int = 25
@@ -98,6 +115,12 @@ class Options(Namespace):
 
         # Standard deviation of the noise to add to pixel-maps
         self.pixel_noise_std = 0.01
+
+        # Early Stopping Options
+        self.early_stop_patience: int = 10
+        self.early_stop_min_delta: float = 0.0
+        self.early_stop_monitor: str = "val_loss"
+        self.early_stop_mode: str = "min"  # 'min' for loss, 'max' for accuracy
 
         # =========================================================================================
         # Miscellaneous Options

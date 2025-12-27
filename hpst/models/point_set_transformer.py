@@ -128,6 +128,14 @@ class SegmentPointSetTransformer(nn.Module):
         seg_logits2 = self.seg_head2(feat2)
         return seg_logits1, seg_logits2
     
+    def forward_single(self, points: Tuple[Tensor, Tensor, Tensor]) -> Tensor:
+        """
+        单路前向：复用双路结构，把同一份 points 复制成 points1/points2，
+        仅返回 seg_logits1 作为该路输出。
+        """
+        seg_logits1, _seg_logits2 = self.forward(points, points)
+        return seg_logits1
+    
 class PointSetTransformerInterface(nn.Module):
     def __init__(self, options: Options, feature_dim: int, output_dim: int):
         super().__init__()
@@ -148,9 +156,11 @@ class PointSetTransformerInterface(nn.Module):
             dec_neighbours=tuple(options.pointnet_dec_neighbours),
             grid_sizes=tuple(options.pointnet_grid_sizes),
             attn_drop_rate=options.dropout,
-            pos_dim=2,
+            pos_dim=4,
             num_heads=options.pointnet_num_heads
         )
 
-    def forward(self, p1, p2):
-        return self.network(p1, p2)
+    def forward(self, p1, p2=None):
+        if p2 is None:
+            return self.network.forward_single(p1)  # (N, output_dim)
+        return self.network(p1, p2)  # (N1, C), (N2, C)

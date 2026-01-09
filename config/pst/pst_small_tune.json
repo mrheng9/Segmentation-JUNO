@@ -16,7 +16,7 @@
     "dropout": 0.2,
   
     "epochs": 15,
-    "batch_size": 10,
+    "batch_size": 8,
     "optimizer": "AdamW",
 
     "early_stop_patience": 5,
@@ -32,11 +32,14 @@
     "loss_gamma": 1.0,
     "loss_beta": 0.9999999,
   
-    "training_file": "/disk_pool1/houyh/data/mixed",
+    "training_file": "/disk_pool1/houyh/data/scattered",
 
     "train_validation_split": 0.85,
     "test_split": 0.10,
     "split_seed": 12345,
+
+    "juno_dataset_type": "hitlist",
+    "juno_scatter_reduce": "sum",
 
     "juno_coords_path": "/disk_pool1/houyh/data/whichPixel_nside32_LCDpmts.npy",
     "juno_vg_mm_per_ns": 190.0,

@@ -17,6 +17,21 @@ MAX_OVERFLOW_RATIO = 0.03
 MAX_DELAY_RETRIES = 4
 DELAY_REDUCE_FACTOR = 0.7
 
+
+def pair_adjacent_events_concat(y10: np.ndarray) -> np.ndarray:
+    """
+    将 10 个 event 两两相邻拼接：
+      输入:  (10, D)
+      输出:  (5,  2D)  => [event0||event1, event2||event3, ...]
+    """
+    if y10.ndim != 2:
+        raise ValueError(f"Expect 2D array (10, D), got shape={y10.shape}")
+    if y10.shape[0] != 10:
+        raise ValueError(f"Expect 10 events, got shape={y10.shape}")
+    a = y10[0::2]  # (5, D)
+    b = y10[1::2]  # (5, D)
+    return np.concatenate([a, b], axis=1)  # (5, 2D)
+
 def parse_id(p: Path) -> int:
     m = ID_RE.match(p.name)
     if not m:
@@ -172,8 +187,12 @@ def main():
     out_root = Path(args.out_dir)
     out_tq   = out_root / "tq_pair"
     out_tgt  = out_root / "target"
+    out_y    = out_root / "y_pair"
+    out_meta = out_root / "meta"
     out_tq.mkdir(parents=True, exist_ok=True)
     out_tgt.mkdir(parents=True, exist_ok=True)
+    out_y.mkdir(parents=True, exist_ok=True)
+    out_meta.mkdir(parents=True, exist_ok=True)
 
 
     ids = find_common_ids(det_feat_dir, y_dir)
@@ -197,19 +216,49 @@ def main():
         fht_pmt_b = np.load(det_feat_dir / f"fht_pmt_{b}.npy")
         npe_pmt_b = np.load(det_feat_dir / f"npe_pmt_{b}.npy")
 
+        # 读取 y：每个 (5, 15)
+        y_a = np.load(y_dir / f"y_{a}.npy")
+        y_b = np.load(y_dir / f"y_{b}.npy")
+        if y_a.shape[0] != 5 or y_b.shape[0] != 5:
+            raise ValueError(f"Expect y_* to be (5, 15); got y_{a}={y_a.shape}, y_{b}={y_b.shape}")
+
+
         # 拼成 10 个 event
         fht_pmt = np.concatenate([fht_pmt_a, fht_pmt_b], axis=0)
         npe_pmt = np.concatenate([npe_pmt_a, npe_pmt_b], axis=0)
+        y10 = np.concatenate([y_a, y_b], axis=0)  # (10, 15)
 
         # 仅 PMT 合并 + 延迟（含源与标签）
         tq_pair, Fm, Nm, Tm = combine_group_adjacent_pmt_with_delay_return_sources(
             fht_pmt, npe_pmt, rng, max_time=MAX_TIME
         )
 
+        # y 相邻两两拼接 -> (5, 30)
+        y_pair = pair_adjacent_events_concat(y10)
+
         base = f"{out_idx}"
-        np.save(out_tq  / f"tq_pair_{base}.npy", tq_pair)  # (5, Npmt, 2, 2)
-        np.save(out_tgt / f"target_{base}.npy", Tm)        # (5, Npmt, 2)
-        print(f"Group ({a},{b}) -> saved {base} -> dirs: tq_pair/, target/")
+        # np.save(out_tq  / f"tq_pair_{base}.npy", tq_pair)  # (5, Npmt, 2, 2)
+        # np.save(out_tgt / f"target_{base}.npy", Tm)        # (5, Npmt, 2)
+        # np.save(out_y   / f"y_{base}.npy", y_pair)    # (5, 30)
+
+        # global indices 0..9 correspond to [a:0..4, b:0..4] via:
+        #   if gidx<5 => (a, gidx), else => (b, gidx-5)
+        pairs = [(0,1),(2,3),(4,5),(6,7),(8,9)]
+        src_file = np.zeros((5, 2), dtype=np.int64)
+        src_loc  = np.zeros((5, 2), dtype=np.int64)
+        for k, (i, j) in enumerate(pairs):
+            for t, gidx in enumerate((i, j)):
+                if gidx < 5:
+                    src_file[k, t] = a
+                    src_loc[k, t] = gidx
+                else:
+                    src_file[k, t] = b
+                    src_loc[k, t] = gidx - 5
+
+        np.save(out_meta / f"src_file_ids_{base}.npy", src_file)  # (5,2)
+        np.save(out_meta / f"src_local_idx_{base}.npy", src_loc)  # (5,2)
+
+        print(f"Group ({a},{b}) -> saved {base} -> dirs: tq_pair/, target/, y_pair/, meta/")
 
     print("Done.")
 

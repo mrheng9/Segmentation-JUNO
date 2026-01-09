@@ -232,11 +232,14 @@ def main(
 
     # Create Loggers and Callbacks
     # ---------------------------------------------------------------------------------------------
+    if log_dir is None:
+        log_dir = "results/"
+    
     if debug:
         logger = False
         callbacks = None
     else:
-        logger = TensorBoardLogger(save_dir="results/", name=name, log_graph=graph)
+        logger = TensorBoardLogger(save_dir=log_dir, name=name, log_graph=graph)
 
         checkpoint_callback = ModelCheckpoint(
             verbose=options.verbose_output,
@@ -309,7 +312,7 @@ if __name__ == '__main__':
     parser.add_argument("-t", "--training_file", type=str, default="../data/training_prong_pixels_sparse_64.h5",
                         help="Input file containing training data.")
 
-    parser.add_argument("-o", "--options_file", type=str, default=None,
+    parser.add_argument("-o", "--options_file", type=str, default="config/pst/pst_small_tune.json",
                         help="JSON file with option overloads.")
 
     parser.add_argument("-c", "--checkpoint", type=str, default=None,
@@ -318,7 +321,7 @@ if __name__ == '__main__':
     parser.add_argument("-n", "--name", type=str, default="lightning_logs",
                         help="The sub-directory to create for this run.")
 
-    parser.add_argument("-l", "--log_dir", type=str, default=None,
+    parser.add_argument("-l", "--log_dir", type=str, default="/disk_pool1/houyh/results/",
                         help="Output directory for the checkpoints and tensorboard logs.")
 
     parser.add_argument("-fp16", action="store_true",

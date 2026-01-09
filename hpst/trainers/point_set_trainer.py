@@ -38,7 +38,8 @@ def collate_fn(batch):
         "batch": torch.cat(batch_idx_list, dim=0),                    # (total_N,)
         "pmt_labels": torch.cat(pmt_labels_list, dim=0),              # (total_M,2)
         "pmt_batch": torch.cat(pmt_batch_idx_list, dim=0),            # (total_M,)
-        "unique_pmt_ids": torch.cat(unique_pmt_ids_list, dim=0),      # (total_M,)
+        "unique_pmt_ids": torch.cat(unique_pmt_ids_list, dim=0), 
+        "num_events": len(batch),     
     }
 
 import numpy as np
@@ -58,7 +59,7 @@ from scipy.optimize import linear_sum_assignment
 from sklearn.metrics import f1_score
 from hpst.utils.options import Options
 from hpst.trainers.neutrino_base import NeutrinoBase
-from hpst.dataset.JUNO_pmt_dataset import JUNOTQPairHitDataset
+from hpst.dataset.JUNO_pmt_dataset import JUNOTQPairHitDataset,JUNOHitListDataset
 from hpst.models.point_set_transformer import PointSetTransformerInterface
 
 import sys
@@ -82,11 +83,17 @@ class PointSetTrainer(NeutrinoBase):
         )
 
         self.loss_fn = torch.nn.BCEWithLogitsLoss()
+        self.scatter_reduce = str(getattr(self.options, "juno_scatter_reduce", "sum"))
 
     @property
     def dataset(self):
-        return JUNOTQPairHitDataset
-
+        ds_type = str(getattr(self.options, "juno_dataset_type", "pair")).lower()
+        if ds_type == "hitlist":
+            return JUNOHitListDataset
+        if ds_type == "pair":
+            return JUNOTQPairHitDataset
+        raise ValueError(f"Unknown options.juno_dataset_type={ds_type!r}, expected 'pair' or 'hitlist'")
+    
     @property
     def dataloader_options(self):
         return {
@@ -117,11 +124,12 @@ class PointSetTrainer(NeutrinoBase):
 
         # 聚合到 PMT（同一 PMT 多个 hit 的情况用 mean；你当前实现每 PMT 1 个点，也兼容）
         # 注意：hit_pmt_ids 是 “全 batch 内 unique pmt”的索引
-        logits_pmt = scatter(logits_hit, hit_pmt_ids, dim=0, reduce="mean", dim_size=pmt_labels.shape[0])
+        logits_pmt = scatter(logits_hit, hit_pmt_ids, dim=0, reduce=self.scatter_reduce, dim_size=pmt_labels.shape[0])
 
         loss = self.loss_fn(logits_pmt, pmt_labels)
 
-        self.log("train_loss", loss, prog_bar=True, batch_size=self.options.batch_size)
+        bs = int(batch.get("num_events", self.options.batch_size))
+        self.log("train_loss", loss, prog_bar=True, batch_size=bs)
         return loss
 
     def validation_step(self, batch, batch_idx):
@@ -134,7 +142,7 @@ class PointSetTrainer(NeutrinoBase):
         ev_batch = batch["batch"]
 
         logits_hit = self.forward(coords, feats, ev_batch)
-        logits_pmt = scatter(logits_hit, hit_pmt_ids, dim=0, reduce="mean", dim_size=pmt_labels.shape[0])
+        logits_pmt = scatter(logits_hit, hit_pmt_ids, dim=0, reduce=self.scatter_reduce, dim_size=pmt_labels.shape[0])
 
         loss = self.loss_fn(logits_pmt, pmt_labels)
         
@@ -158,13 +166,14 @@ class PointSetTrainer(NeutrinoBase):
         
         f1_eplus = f1_score(label_np[:, 0], pred_np[:, 0], zero_division=0)
         f1_c14 = f1_score(label_np[:, 1], pred_np[:, 1], zero_division=0)
-        
-        self.log("val_f1_eplus", f1_eplus, sync_dist=True)
-        self.log("val_f1_c14", f1_c14, sync_dist=True)
-        
-        self.log("val_loss", loss, prog_bar=True, sync_dist=True, batch_size=self.options.batch_size)
-        self.log("val_acc_exact", acc_exact, prog_bar=True, sync_dist=True)
-        self.log("val_acc_eplus", acc_eplus, sync_dist=True)
-        self.log("val_acc_c14", acc_c14, sync_dist=True)
-        self.log("val_acc_element", acc_elementwise, sync_dist=True)
+
+        bs = int(batch.get("num_events", self.options.batch_size))
+        self.log("val_f1_eplus", f1_eplus, sync_dist=True, batch_size=bs)
+        self.log("val_f1_c14", f1_c14, sync_dist=True, batch_size=bs)
+
+        self.log("val_loss", loss, prog_bar=True, sync_dist=True, batch_size=bs)
+        self.log("val_acc_exact", acc_exact, prog_bar=True, sync_dist=True, batch_size=bs)
+        self.log("val_acc_eplus", acc_eplus, sync_dist=True, batch_size=bs)
+        self.log("val_acc_c14", acc_c14, sync_dist=True, batch_size=bs)
+        self.log("val_acc_element", acc_elementwise, sync_dist=True, batch_size=bs)
         return loss

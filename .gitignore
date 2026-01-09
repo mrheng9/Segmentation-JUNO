@@ -16,9 +16,11 @@ runs/
 *.txt
 *.log
 *.out
+*.ipynb
 
 # HPST model artifacts 
 HPST/
+AA_HPST-Nova/
 
 # environment / virtualenvs / caches
 *.py[cod]

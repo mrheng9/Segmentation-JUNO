@@ -52,11 +52,8 @@ def plot_training_curves(log_dir: str):
     metrics_to_plot = {
         'train_loss': 'Train Loss',
         'val_loss': 'Val Loss',
-        'val_acc_exact': 'Val Accuracy (Exact Match)',
-        'val_acc_eplus': 'Val Acc (e+)',
-        'val_acc_c14': 'Val Acc (C14)',
-        'val_f1_eplus': 'Val F1 (e+)',
-        'val_f1_c14': 'Val F1 (C14)'
+        'val_acc': 'Val Accuracy (Hit-level)',
+        'val_f1': 'Val F1 (Hit-level)',
     }
     
     data = {}
@@ -244,7 +241,7 @@ def main(
         checkpoint_callback = ModelCheckpoint(
             verbose=options.verbose_output,
             every_n_train_steps=eval,
-            monitor="val_acc_exact",
+            monitor="val_f1",
             mode="max",
             save_top_k=5,
             save_last=True

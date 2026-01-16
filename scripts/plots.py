@@ -1465,104 +1465,88 @@ def main():
     # )
 
 
-    plot_mollweide_scatter_points(
-        lon=lon_h,
-        lat=lat_h,
-        y2=y_true_h,
-        out_path=os.path.join(out_dir, f"pmt_event{ev_idx}_truth_scatter.png"),
-        title=f"PMT Mollweide - Truth (event_idx={ev_idx}, {plot_split})",
-        s=16.0,
-        alpha=0.90,
-        show_legend=True,
-        background="white",
-    )
+    # plot_mollweide_scatter_points(
+    #     lon=lon_h,
+    #     lat=lat_h,
+    #     y2=y_true_h,
+    #     out_path=os.path.join(out_dir, f"pmt_event{ev_idx}_truth_scatter.png"),
+    #     title=f"PMT Mollweide - Truth (event_idx={ev_idx}, {plot_split})",
+    #     s=16.0,
+    #     alpha=0.90,
+    #     show_legend=True,
+    #     background="white",
+    # )
 
-    plot_mollweide_scatter_points(
-        lon=lon_h,
-        lat=lat_h,
-        y2=y_pred_h,
-        out_path=os.path.join(out_dir, f"pmt_event{ev_idx}_pred_scatter.png"),
-        title=f"PMT Mollweide - Pred (event_idx={ev_idx}, {plot_split})",
-        s=16.0,
-        alpha=0.90,
-        show_legend=True,
-        background="white",
-    )
+    # plot_mollweide_scatter_points(
+    #     lon=lon_h,
+    #     lat=lat_h,
+    #     y2=y_pred_h,
+    #     out_path=os.path.join(out_dir, f"pmt_event{ev_idx}_pred_scatter.png"),
+    #     title=f"PMT Mollweide - Pred (event_idx={ev_idx}, {plot_split})",
+    #     s=16.0,
+    #     alpha=0.90,
+    #     show_legend=True,
+    #     background="white",
+    # )
 
-    # (Scatter) Truth: e+ only / C14 only
-    y_true_e_only = pack_y2_from_masks(mask_e_true, np.zeros_like(mask_e_true, dtype=bool))
-    y_true_c_only = pack_y2_from_masks(np.zeros_like(mask_c_true, dtype=bool), mask_c_true)
+    # # (Scatter) Truth: e+ only / C14 only
+    # y_true_e_only = pack_y2_from_masks(mask_e_true, np.zeros_like(mask_e_true, dtype=bool))
+    # y_true_c_only = pack_y2_from_masks(np.zeros_like(mask_c_true, dtype=bool), mask_c_true)
 
 
-    plot_mollweide_scatter_points(
-        lon=lon_h,
-        lat=lat_h,
-        y2=y_true_e_only,
-        out_path=os.path.join(out_dir, f"pmt_event{ev_idx}_truth_eplus_scatter.png"),
-        title=f"PMT Mollweide - Truth e+ only (event_idx={ev_idx}, {plot_split})",
-        s=16.0,
-        alpha=0.90,
-        show_legend=True,
-        background="white",
-    )
+    # plot_mollweide_scatter_points(
+    #     lon=lon_h,
+    #     lat=lat_h,
+    #     y2=y_true_e_only,
+    #     out_path=os.path.join(out_dir, f"pmt_event{ev_idx}_truth_eplus_scatter.png"),
+    #     title=f"PMT Mollweide - Truth e+ only (event_idx={ev_idx}, {plot_split})",
+    #     s=16.0,
+    #     alpha=0.90,
+    #     show_legend=True,
+    #     background="white",
+    # )
 
-    plot_mollweide_scatter_points(
-        lon=lon_h,
-        lat=lat_h,
-        y2=y_true_c_only,
-        out_path=os.path.join(out_dir, f"pmt_event{ev_idx}_truth_c14_scatter.png"),
-        title=f"PMT Mollweide - Truth C14 only (event_idx={ev_idx}, {plot_split})",
-        s=16.0,
-        alpha=0.90,
-        show_legend=True,
-        background="white",
-    )
+    # plot_mollweide_scatter_points(
+    #     lon=lon_h,
+    #     lat=lat_h,
+    #     y2=y_true_c_only,
+    #     out_path=os.path.join(out_dir, f"pmt_event{ev_idx}_truth_c14_scatter.png"),
+    #     title=f"PMT Mollweide - Truth C14 only (event_idx={ev_idx}, {plot_split})",
+    #     s=16.0,
+    #     alpha=0.90,
+    #     show_legend=True,
+    #     background="white",
+    # )
 
-    # (Scatter) Pred: e+ only / C14 only
-    y_pred_e_only = pack_y2_from_masks(mask_e_pred, np.zeros_like(mask_e_pred, dtype=bool))
-    y_pred_c_only = pack_y2_from_masks(np.zeros_like(mask_c_pred, dtype=bool), mask_c_pred)
+    # # (Scatter) Pred: e+ only / C14 only
+    # y_pred_e_only = pack_y2_from_masks(mask_e_pred, np.zeros_like(mask_e_pred, dtype=bool))
+    # y_pred_c_only = pack_y2_from_masks(np.zeros_like(mask_c_pred, dtype=bool), mask_c_pred)
 
-    plot_mollweide_scatter_points(
-        lon=lon_h,
-        lat=lat_h,
-        y2=y_pred_e_only,
-        out_path=os.path.join(out_dir, f"pmt_event{ev_idx}_pred_eplus_scatter.png"),
-        title=f"PMT Mollweide - Pred e+ only (event_idx={ev_idx}, {plot_split})",
-        s=16.0,
-        alpha=0.90,
-        show_legend=True,
-        background="white",
-    )
+    # plot_mollweide_scatter_points(
+    #     lon=lon_h,
+    #     lat=lat_h,
+    #     y2=y_pred_e_only,
+    #     out_path=os.path.join(out_dir, f"pmt_event{ev_idx}_pred_eplus_scatter.png"),
+    #     title=f"PMT Mollweide - Pred e+ only (event_idx={ev_idx}, {plot_split})",
+    #     s=16.0,
+    #     alpha=0.90,
+    #     show_legend=True,
+    #     background="white",
+    # )
 
-    plot_mollweide_scatter_points(
-        lon=lon_h,
-        lat=lat_h,
-        y2=y_pred_c_only,
-        out_path=os.path.join(out_dir, f"pmt_event{ev_idx}_pred_c14_scatter.png"),
-        title=f"PMT Mollweide - Pred C14 only (event_idx={ev_idx}, {plot_split})",
-        s=16.0,
-        alpha=0.90,
-        show_legend=True,
-        background="white",
-    )
+    # plot_mollweide_scatter_points(
+    #     lon=lon_h,
+    #     lat=lat_h,
+    #     y2=y_pred_c_only,
+    #     out_path=os.path.join(out_dir, f"pmt_event{ev_idx}_pred_c14_scatter.png"),
+    #     title=f"PMT Mollweide - Pred C14 only (event_idx={ev_idx}, {plot_split})",
+    #     s=16.0,
+    #     alpha=0.90,
+    #     show_legend=True,
+    #     background="white",
+    # )
 
-    print(f"[OK] plots saved to: {out_dir}")
-
-    # -------------------------
-    # DEBUG: inspect test batch structure (keys + tensor shapes)
-    # -------------------------
-    # if getattr(model, "testing_dataset", None) is not None:
-    #     loader = model.test_dataloader()
-    #     batch0 = next(iter(loader))
-    #     print("[DEBUG] test batch keys:", list(batch0.keys()))
-    #     for k, v in batch0.items():
-    #         if torch.is_tensor(v):
-    #             print(f"[DEBUG] {k}: shape={tuple(v.shape)} dtype={v.dtype}")
-    #         else:
-    #             try:
-    #                 print(f"[DEBUG] {k}: type={type(v)}")
-    #             except Exception:
-    #                 print(f"[DEBUG] {k}: <unprintable>")
+    # print(f"[OK] plots saved to: {out_dir}")
 
     # -------------------------
     # 3) Pair scatter 

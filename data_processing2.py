@@ -3,7 +3,6 @@ import json
 import re
 from pathlib import Path
 from typing import Dict, Any, Tuple
-
 import numpy as np
 
 ID_RE = re.compile(r".*_(\d+)\.npy$")

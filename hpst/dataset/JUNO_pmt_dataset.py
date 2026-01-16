@@ -179,7 +179,6 @@ class JUNOTQPairHitDataset(Dataset):
     
 
 
-
 class JUNOHitListDataset(Dataset):
     """
     Hit-list dataset:
@@ -322,6 +321,115 @@ class JUNOHitListDataset(Dataset):
             "hit_pmt_ids": torch.from_numpy(hit_pmt_ids).long(),
             "pmt_labels": pmt_labels,
             "unique_pmt_ids": torch.from_numpy(unique_pmts).long(),
+        }
+
+    def compute_statistics(self, stats_sample: int = 200):
+        n = min(stats_sample, len(self))
+        q_list = []
+        for i in range(n):
+            d = self._load_event(i)
+            hit_q = d["hit_q"].astype(np.float32)
+            if hit_q.size == 0:
+                continue
+            q_list.append(hit_q)
+
+        if len(q_list) == 0:
+            self.q_mean = 0.0
+            self.q_std = 1.0
+        else:
+            q_cat = np.concatenate(q_list, axis=0)
+            self.q_mean = float(q_cat.mean())
+            self.q_std = float(max(q_cat.std(), 1e-6))
+
+        mean = torch.tensor([self.q_mean], dtype=torch.float32)
+        std = torch.tensor([self.q_std], dtype=torch.float32)
+        return mean, std, torch.zeros(1), torch.ones(1), torch.zeros(1), torch.ones(1)
+    
+
+
+class JUNOAPMEHitDataset(Dataset):
+    """
+    AP/ME mixed hit-level dataset:
+      root/hits/event_*.npz
+      each npz contains:
+        hit_pmt (N,), hit_t (N,), hit_q (N,), hit_label (N,) where 0=AP, 1=ME
+    Output per sample:
+      hit_features: (N,5) [x,y,z,vt,q_norm]
+      hit_labels:   (N,)  int64
+      hit_pmt:      (N,)  int64  (global PMT id, for visualization)
+    """
+
+    def __init__(
+        self,
+        root_dir: str,
+        options: Optional[Options] = None,
+        coords_path: str = "/disk_pool1/houyh/data/whichPixel_nside32_LCDpmts.npy",
+        vg_mm_per_ns: float = 190.0,
+        stats_sample: int = 200,
+        radius_mm: float = 19500.0,
+        rng_seed: int = 12345,
+    ):
+        if options is not None:
+            coords_path = getattr(options, "juno_coords_path", coords_path)
+            vg_mm_per_ns = float(getattr(options, "juno_vg_mm_per_ns", vg_mm_per_ns))
+            radius_mm = float(getattr(options, "juno_radius_mm", radius_mm))
+            rng_seed = int(getattr(options, "juno_rng_seed", rng_seed))
+
+        self.root = Path(root_dir)
+        self.hits_dir = self.root / "hits"
+        self.hit_files = sorted(self.hits_dir.glob("event_*.npz"))
+        if len(self.hit_files) == 0:
+            raise RuntimeError(f"No event_*.npz found under {self.hits_dir}")
+
+        coord_data = np.load(coords_path)
+        coordx = coord_data[:, 2].astype(np.float32)
+        coordy = coord_data[:, 3].astype(np.float32)
+        coordz = coord_data[:, 4].astype(np.float32)
+        self.coords_mm = torch.from_numpy(np.stack([coordx, coordy, coordz], axis=-1)).float()  # (NPmt,3)
+
+        self.vg_mm_per_ns = float(vg_mm_per_ns)
+        self.radius_mm = float(radius_mm)
+        self.rng = np.random.default_rng(int(rng_seed))
+
+        self.compute_statistics(stats_sample=stats_sample)
+
+    def __len__(self):
+        return len(self.hit_files)
+
+    def _load_event(self, idx: int):
+        return np.load(self.hit_files[idx], allow_pickle=False)
+
+    def __getitem__(self, idx: int):
+        d = self._load_event(idx)
+
+        hit_pmt = d["hit_pmt"].astype(np.int64)     # (N,)
+        hit_t = d["hit_t"].astype(np.float32)       # (N,)
+        hit_q = d["hit_q"].astype(np.float32)       # (N,)
+        hit_label = d["hit_label"].astype(np.int64) # (N,) 0/1
+
+        # Guard: avoid empty events crashing the model
+        if hit_pmt.size == 0:
+            # choose a dummy PMT 0
+            hit_pmt = np.array([0], dtype=np.int64)
+            hit_t = np.array([0.0], dtype=np.float32)
+            hit_q = np.array([0.0], dtype=np.float32)
+            hit_label = np.array([0], dtype=np.int64)
+
+        # coords: xyz from pmt + vt from time
+        xyz_hit = (self.coords_mm[torch.from_numpy(hit_pmt).long()] / self.radius_mm)  # (N,3)
+
+        vt = torch.from_numpy((hit_t * self.vg_mm_per_ns).astype(np.float32)).unsqueeze(-1) / self.radius_mm  # (N,1)
+        coords4 = torch.cat([xyz_hit, vt], dim=-1)  # (N,4)
+
+        q_norm = ((hit_q - self.q_mean) / self.q_std).astype(np.float32)
+        feats = torch.from_numpy(q_norm).unsqueeze(-1).float()  # (N,1)
+
+        hit_features = torch.cat([coords4, feats], dim=-1)  # (N,5)
+
+        return {
+            "hit_features": hit_features,
+            "hit_labels": torch.from_numpy(hit_label).long(),
+            "hit_pmt": torch.from_numpy(hit_pmt).long(),
         }
 
     def compute_statistics(self, stats_sample: int = 200):

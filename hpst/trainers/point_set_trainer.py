@@ -42,39 +42,82 @@ def collate_fn(batch):
         "num_events": len(batch),     
     }
 
+# def collate_fn_hitcls(batch):
+#     """
+#     Hit-level classification collate (event-level -> concatenated hits).
+#     Output dict:
+#       hit_features: (total_N,5)
+#       hit_labels:   (total_N,)
+#       hit_pmt:      (total_N,)  global pmt id (for visualization)
+#       batch:        (total_N,)  event index within batch
+#       num_events:   int
+#     """
+#     hit_features_list = []
+#     hit_labels_list = []
+#     hit_pmt_list = []
+#     batch_idx_list = []
+
+#     for i, sample in enumerate(batch):
+#         x = sample["hit_features"]
+#         y = sample["hit_labels"]
+#         p = sample["hit_pmt"]
+
+#         n = int(x.shape[0])
+#         hit_features_list.append(x)
+#         hit_labels_list.append(y)
+#         hit_pmt_list.append(p)
+#         batch_idx_list.append(torch.full((n,), i, dtype=torch.long))
+
+#     return {
+#         "hit_features": torch.cat(hit_features_list, dim=0),
+#         "hit_labels": torch.cat(hit_labels_list, dim=0),
+#         "hit_pmt": torch.cat(hit_pmt_list, dim=0),
+#         "batch": torch.cat(batch_idx_list, dim=0),
+#         "num_events": len(batch),
+#     }
+
+import torch
+
 def collate_fn_hitcls(batch):
-    """
-    Hit-level classification collate (event-level -> concatenated hits).
-    Output dict:
-      hit_features: (total_N,5)
-      hit_labels:   (total_N,)
-      hit_pmt:      (total_N,)  global pmt id (for visualization)
-      batch:        (total_N,)  event index within batch
-      num_events:   int
-    """
     hit_features_list = []
     hit_labels_list = []
     hit_pmt_list = []
     batch_idx_list = []
 
-    for i, sample in enumerate(batch):
-        x = sample["hit_features"]
-        y = sample["hit_labels"]
-        p = sample["hit_pmt"]
+    chunk_list = []
+    levent_list = []
 
+    for i, sample in enumerate(batch):
+        x = sample["hit_features"]   # (Ni,5)
+        y = sample["hit_labels"]     # (Ni,)
+        p = sample.get("hit_pmt", None)
         n = int(x.shape[0])
+
         hit_features_list.append(x)
         hit_labels_list.append(y)
-        hit_pmt_list.append(p)
+        if p is not None:
+            hit_pmt_list.append(p)
+
         batch_idx_list.append(torch.full((n,), i, dtype=torch.long))
 
-    return {
+        # NEW: broadcast event ids to each hit
+        ci = int(sample["chunk_index"])
+        ei = int(sample["local_event"])
+        chunk_list.append(torch.full((n,), ci, dtype=torch.long))
+        levent_list.append(torch.full((n,), ei, dtype=torch.long))
+
+    out = {
         "hit_features": torch.cat(hit_features_list, dim=0),
         "hit_labels": torch.cat(hit_labels_list, dim=0),
-        "hit_pmt": torch.cat(hit_pmt_list, dim=0),
         "batch": torch.cat(batch_idx_list, dim=0),
         "num_events": len(batch),
+        # NEW:
+        "chunk_index": torch.cat(chunk_list, dim=0),
+        "local_event": torch.cat(levent_list, dim=0),
     }
+    if hit_pmt_list:
+        out["hit_pmt"] = torch.cat(hit_pmt_list, dim=0)
+    return out
 
 import numpy as np
 import torch
@@ -139,6 +182,18 @@ class PointSetTrainer(NeutrinoBase):
             "num_workers": self.options.num_dataloader_workers,
             "collate_fn": the_collate,
         }
+    
+    def forward(self, coords: torch.Tensor, feats: torch.Tensor, batch: torch.Tensor) -> torch.Tensor:
+        """
+        coords: (N, 4)  [x,y,z,t] (or normalized)
+        feats:  (N, 1)  e.g. q_norm
+        batch:  (N,)    event index for each hit
+        returns:
+          logits: (N, 2)
+        """
+        points = (coords, feats, batch)
+        return self.network(points)  # PointSetTransformerInterface.forward(p1, p2=None)
+
 
     def training_step(self, batch, batch_idx):
         ds_type = str(getattr(self.options, "juno_dataset_type", "pair")).lower()
@@ -176,6 +231,45 @@ class PointSetTrainer(NeutrinoBase):
         return loss
 
     def validation_step(self, batch, batch_idx):
+        ds_type = str(getattr(self.options, "juno_dataset_type", "pair")).lower()
+
+        if ds_type == "apme":
+            hit_features = batch["hit_features"]
+            hit_labels = batch["hit_labels"]
+            coords = hit_features[:, :4]
+            feats = hit_features[:, 4:]
+            ev_batch = batch["batch"]
+
+            logits_hit = self.forward(coords, feats, ev_batch)  # (N,2)
+            loss = self.ce_loss(logits_hit, hit_labels)
+
+            # argmax metrics (kept)
+            pred = torch.argmax(logits_hit, dim=-1)
+            acc = (pred == hit_labels).float().mean()
+
+            # NEW: thresholded metrics on prob(class=1)
+            thr = float(getattr(self.options, "hit_threshold", 0.5))
+            prob_me = torch.softmax(logits_hit, dim=-1)[:, 1]
+            pred_thr = (prob_me >= thr).long()
+
+            # compute precision/recall/f1 in torch to avoid sklearn overhead in DDP
+            tp = ((pred_thr == 1) & (hit_labels == 1)).sum().float()
+            fp = ((pred_thr == 1) & (hit_labels == 0)).sum().float()
+            fn = ((pred_thr == 0) & (hit_labels == 1)).sum().float()
+
+            prec = tp / (tp + fp + 1e-9)
+            rec = tp / (tp + fn + 1e-9)
+            f1 = 2 * prec * rec / (prec + rec + 1e-9)
+
+            bs = int(batch.get("num_events", self.options.batch_size))
+            self.log("val_loss", loss, prog_bar=True, sync_dist=True, batch_size=bs)
+            self.log("val_acc", acc, prog_bar=True, sync_dist=True, batch_size=bs)
+            self.log("val_prec_thr", prec, sync_dist=True, batch_size=bs)
+            self.log("val_rec_thr", rec, prog_bar=True, sync_dist=True, batch_size=bs)
+            self.log("val_f1_thr", f1, prog_bar=True, sync_dist=True, batch_size=bs)
+            return loss
+
+    # def validation_step(self, batch, batch_idx):
         ds_type = str(getattr(self.options, "juno_dataset_type", "pair")).lower()
 
         if ds_type == "apme":

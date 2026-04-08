@@ -15,8 +15,8 @@
     "pointnet_grid_sizes": [0.06, 0.12, 0.24, 0.48],
     "dropout": 0.2,
   
-    "epochs": 15,
-    "batch_size": 8,
+    "epochs": 30,
+    "batch_size": 2,
     "optimizer": "AdamW",
 
     "early_stop_patience": 5,
@@ -47,6 +47,7 @@
     "juno_neg_ratio": 1,
     "juno_neg_cap": 8192,
     "juno_rng_seed": 12345,
+    "hit_threshold": 0.5,
 
     "num_dataloader_workers": 16,
     "normalize_features": true,

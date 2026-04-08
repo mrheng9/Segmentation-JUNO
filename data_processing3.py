@@ -48,26 +48,19 @@ def event_to_numpy_hits(ev) -> np.ndarray:
 def sanitize_hits(
     hit_tab: np.ndarray,
     n_pmt: int = NPmt,
-    time_max: Optional[float] = None,
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
     """
     hit_tab: (Nhits,3) object array [pmtid, time, charge]
     Return pmt(int32), t(float32), q(float32) after filtering invalid rows.
+    NOTE: this function does NOT apply any time shifting/windowing.
     """
-    # Cast
     pmt = hit_tab[:, 0].astype(np.int64, copy=False)
     t = hit_tab[:, 1].astype(np.float32, copy=False)
     q = hit_tab[:, 2].astype(np.float32, copy=False)
 
-    # Basic validity
     ok = np.isfinite(t) & np.isfinite(q)
     ok &= (q > 0)
-
-    # PMT range filter (important because ME PMTID currently looks like raw addresses)
     ok &= (pmt >= 0) & (pmt < int(n_pmt))
-
-    if time_max is not None:
-        ok &= (t >= 0) & (t <= float(time_max))
 
     pmt = pmt[ok].astype(np.int32, copy=False)
     t = t[ok].astype(np.float32, copy=False)
@@ -96,10 +89,22 @@ def sort_hits(pmt: np.ndarray, t: np.ndarray, q: np.ndarray, lbl: np.ndarray):
 def main():
     ap = argparse.ArgumentParser("Build AP/ME mixed hit-level dataset (per-hit binary classification).")
     ap.add_argument("--ap-dir", default="/disk_pool1/houyh/data/AP_ME_raw/AP_chunks", help="Directory containing AP_chunk_*.npy")
-    ap.add_argument("--me-dir", default="/disk_pool1/houyh/data/AP_ME_raw/ME_chunks", help="Directory containing ME_chunk_*.npy")
+    ap.add_argument("--me-dir", default="/disk_pool1/houyh/data/AP_ME_raw/ME_chunks_new_new", help="Directory containing ME_chunk_*.npy")
     ap.add_argument("--out-dir", default="/disk_pool1/houyh/data/AP_ME", help="Output dataset root")
     ap.add_argument("--seed", type=int, default=42)
-    ap.add_argument("--time-max", type=float, default=None, help="Optional: keep hits with 0<=t<=time-max")
+    ap.add_argument("--time-max", type=float, default=1000, help="Optional: keep/clip hits into [0,time-max] after time shifting")
+    ap.add_argument(
+        "--time-shift",
+        choices=["none", "min"],
+        default="min",
+        help="Per-event time alignment. 'min' shifts so min(t)=0; 'none' keeps raw t.",
+    )
+    ap.add_argument(
+        "--time-window-mode",
+        choices=["clip", "filter"],
+        default="clip",
+        help="How to apply time-max: 'clip' clamps t into [0,T]; 'filter' drops hits outside [0,T].",
+    )
     ap.add_argument(
         "--max-hits-per-class",
         type=int,
@@ -137,8 +142,28 @@ def main():
             ap_tab = event_to_numpy_hits(ap_events[ei])
             me_tab = event_to_numpy_hits(me_events[ei])
 
-            ap_pmt, ap_t, ap_q = sanitize_hits(ap_tab, n_pmt=NPmt, time_max=args.time_max)
-            me_pmt, me_t, me_q = sanitize_hits(me_tab, n_pmt=NPmt, time_max=args.time_max)
+            ap_pmt, ap_t, ap_q = sanitize_hits(ap_tab, n_pmt=NPmt)
+            me_pmt, me_t, me_q = sanitize_hits(me_tab, n_pmt=NPmt)
+
+            # --- per-event time shift ---
+            if args.time_shift == "min":
+                if ap_t.size > 0:
+                    ap_t = ap_t - float(ap_t.min())
+                if me_t.size > 0:
+                    me_t = me_t - float(me_t.min())
+
+            # --- optional time window ---
+            if args.time_max is not None:
+                tmax = float(args.time_max)
+                if args.time_window_mode == "clip":
+                    ap_t = np.clip(ap_t, 0.0, tmax).astype(np.float32, copy=False)
+                    me_t = np.clip(me_t, 0.0, tmax).astype(np.float32, copy=False)
+                else:  # "filter"
+                    m_ap = (ap_t >= 0.0) & (ap_t <= tmax)
+                    ap_pmt, ap_t, ap_q = ap_pmt[m_ap], ap_t[m_ap], ap_q[m_ap]
+
+                    m_me = (me_t >= 0.0) & (me_t <= tmax)
+                    me_pmt, me_t, me_q = me_pmt[m_me], me_t[m_me], me_q[m_me]
 
             ap_pmt, ap_t, ap_q = downsample_hits(rng, ap_pmt, ap_t, ap_q, args.max_hits_per_class)
             me_pmt, me_t, me_q = downsample_hits(rng, me_pmt, me_t, me_q, args.max_hits_per_class)

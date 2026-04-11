@@ -341,3 +341,150 @@ python scripts/plots_hits.py
 
 If your evaluation `.npz` does not contain `chunk_index/local_event`, re-run `evaluation_hits.py` using the version that exports event ids (current script enforces this).
 
+## 7. Dataset Preparation (Data Processing Scripts)
+
+This repo includes several data-preparation scripts to build training/evaluation datasets for different tasks. These scripts are **not** part of the Lightning training loop; they are used to generate the on-disk dataset layout consumed by the Datasets under `hpst/dataset/`.
+
+### 7.1 JUNO (pair): PMT-level adjacent-event pairing with a delayed second event (`data_processing.py`)
+
+**Goal:** build a *paired-event* PMT-level dataset where two adjacent events are combined, and the second event is time-shifted by a sampled delay. The script produces:
+- per-pair PMT features (time/charge for each of the two component events)
+- PMT-level two-channel targets: whether each PMT is hit by event-1 / event-2
+
+**Key idea (high level):**
+- Take 10 events (two files × 5 events each), pair them as `(0,1), (2,3), ... (8,9)`.
+- Apply a positive time delay to the *second* event in each pair, with overflow control (hits shifted beyond 1000 ns are dropped).
+- Combine PMT-level FHT by **min-nonzero**, and NPE by **sum**.
+- Produce a 2-channel PMT label: `[hit_in_event1, hit_in_event2]`.
+
+**Important knobs (defaults shown in the script):**
+- `--delay-mode {gamma,exp}`
+- `--delay-mean`, `--delay-min`, `--delay-max` (ns)
+- `--overflow-ratio` (max allowed overflow fraction after shifting)
+- `--delay-reduce-factor` (shrink delay if overflow too large)
+- `MAX_TIME` is 1000 ns (time window upper bound)
+
+**Outputs (under `--out-dir`):**
+- `tq_pair/` : `tq_pair_{id}.npy` (when enabled in the script)
+- `target/`  : `target_{id}.npy`   (when enabled)
+- `y_pair/`  : paired y labels (when enabled)
+- `meta/`    : always saved
+  - `src_file_ids_{id}.npy`   shape `(5,2)` mapping each pair to original `file_id`s
+  - `src_local_idx_{id}.npy`  shape `(5,2)` mapping to local event indices (0..4)
+
+> Note: In the current `data_processing.py`, saving `tq_pair/target/y_pair` is commented out and only `meta/` is written. If you intend to train on `pair`, ensure those arrays are actually saved (uncomment the `np.save(...)` lines).
+
+Example:
+
+```bash
+python data_processing.py ^
+  --det-feat-dir "D:\data\det_feat" ^
+  --y-dir "D:\data\y" ^
+  --out-dir "D:\data\mixed_pair" ^
+  --seed 42 ^
+  --delay-mode gamma ^
+  --delay-mean 300 ^
+  --delay-min 200 ^
+  --delay-max 600 ^
+  --overflow-ratio 0.03
+```
+
+---
+
+### 7.2 JUNO (hitlist): build variable-length hit-list events with noise injection (`data_processing2.py`)
+
+**Goal:** build a **hit-list** dataset saved as per-event `event_*.npz`. Each event contains:
+- hit-level arrays (`hit_pmt`, `hit_t`, `hit_q`) with variable length
+- `hit_src` indicating source (0=e+, 1=noise)
+- PMT-level 2-channel labels `pmt_label` of shape `(NPmt, 2)`:
+  - channel 0: PMT hit by e+
+  - channel 1: PMT hit by noise
+
+**Inputs:**
+- `--det-feat-dir`: contains `fht_pmt_{id}.npy` and `npe_pmt_{id}.npy` (shape `(5, NPmt)`)
+- `--y-dir`: contains `y_{id}.npy` (shape `(5, 15)`)
+- `--stats-dir`: must provide `per_event_stats.jsonl` used for noise sampling (NPE distribution etc.)
+
+**Noise sampling logic (summary):**
+- number of injected noise hits comes from stats (`Nhits_le_1000`)
+- noise times are uniform in `[fht_min_hit, 1000]` (with guards)
+- noise charges are sampled from a per-event discrete distribution over {1..6}
+
+**Output layout (under `--out-dir`):**
+- `{out_dir}/hits/event_{global_event_index:06d}.npz`
+
+Each `.npz` includes at least:
+- `file_id`, `local_event`
+- `y` (shape `(15,)` for this local event)
+- `hit_pmt`, `hit_t`, `hit_q`, `hit_src`
+- `pmt_label` (shape `(NPmt,2)`)
+
+Example:
+
+```bash
+python data_processing2.py ^
+  --det-feat-dir "D:\data\det_feat" ^
+  --y-dir "D:\data\y" ^
+  --stats-dir "D:\data\scattered" ^
+  --out-dir "D:\data\scattered" ^
+  --seed 123 ^
+  --clip-eplus-to-1000
+```
+
+---
+
+### 7.3 APME (hit-level): mix AP/ME raw chunks into a per-hit classification dataset (`data_processing3.py`)
+
+**Goal:** build a **hit-level binary classification** dataset for APME. It mixes AP hits (label 0) and ME hits (label 1) into a single event and stores hit-level labels.
+
+**Inputs:**
+- `--ap-dir`: directory containing `AP_chunk_*.npy`
+- `--me-dir`: directory containing `ME_chunk_*.npy`
+- Each chunk file is an object array of events; each event is a `(Nhits, 3)` table:
+  `[PMTID, Time, Charge]`
+
+**Processing steps:**
+- sanitize hits: finite time/charge, `q>0`, `0 <= pmt < 17612`
+- optional per-event time alignment:
+  - `--time-shift min`: shift so that `min(t)=0` per event
+  - `--time-shift none`: keep raw times
+- optional time window with `--time-max`:
+  - `--time-window-mode clip`: clamp to `[0, T]`
+  - `--time-window-mode filter`: drop hits outside `[0, T]`
+- optional subsampling: `--max-hits-per-class`
+- sort hits by `(pmt, t)` before saving
+
+**Output layout (under `--out-dir`):**
+- `{out_dir}/hits/event_{global_event_index:06d}.npz`
+
+Each `.npz` includes:
+- `chunk_index`, `local_event` (for later event-level grouping/analysis)
+- `hit_pmt`, `hit_t`, `hit_q`
+- `hit_label` where 0=AP, 1=ME
+- metadata: `ap_src`, `me_src`
+
+Example:
+
+```bash
+python data_processing3.py ^
+  --ap-dir "D:\data\AP_ME_raw\AP_chunks" ^
+  --me-dir "D:\data\AP_ME_raw\ME_chunks_new_new" ^
+  --out-dir "D:\data\AP_ME" ^
+  --seed 42 ^
+  --time-shift min ^
+  --time-max 1000 ^
+  --time-window-mode clip ^
+  --max-hits-per-class 12000
+```
+
+---
+
+### 7.4 Expected dataset roots used by training/evaluation
+
+- For JUNO `hitlist`: `--training_file` should point to the dataset root containing `hits/event_*.npz` produced by `data_processing2.py`.
+- For APME: `--training_file` should point to the dataset root containing `hits/event_*.npz` produced by `data_processing3.py`.
+- For JUNO `pair`: ensure the paired PMT arrays are produced and that your Dataset implementation expects the same directory/file naming.
+
+If you are unsure which dataset type is being used, check:
+- `options.juno_dataset_type` in your JSON config
+- and/or the Dataset class constructed in `hpst/dataset/`.

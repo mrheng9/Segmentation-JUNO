@@ -1227,13 +1227,13 @@ def main():
     parser.add_argument(
         "--eval_dir",
         type=str,
-        default="/disk_pool1/houyh/results/Noise_run/version_2",
+        default="/home/houyh/Segmentation-JUNO-C/results/JUNO_run/version0/7",
         help="Directory that contains eval_single_event_*.npz and (optionally) eval_full.npz. Also used as output directory.",
     )
     parser.add_argument(
         "--mixed_root",
         type=str,
-        default="/disk_pool1/houyh/data/scattered",
+        default="/disk_pool1/houyh/data/mixed",
         help="Root directory for mixed pair data (expects tq_pair/, target/, y_pair/).",
     )
     parser.add_argument(
@@ -1263,7 +1263,7 @@ def main():
     args = parser.parse_args()
 
     eval_dir = str(args.eval_dir)
-    out_dir = ensure_dir(args.eval_dir + "/plots/2") 
+    out_dir = ensure_dir(args.eval_dir + "/plots") 
 
     # -------------------------
     # 1) Load eval_full and reproduce evaluation_JUNO.py plots (CMs, ROC/PR)
@@ -1310,7 +1310,7 @@ def main():
     #    NOTE: need coords_mm from dataset -> load PointSetTrainer to access ds.coords_mm
     # -------------------------
     if args.split == "auto":
-        path = os.path.join(eval_dir, "eval_single_event_279.npz")
+        path = os.path.join(eval_dir, "eval_single_event_366.npz")
         if not os.path.exists(path):
             path = os.path.join(eval_dir, "eval_single_event_test.npz")
     else:
@@ -1464,6 +1464,9 @@ def main():
     #     mode="count",
     # )
 
+####################################################################
+#scatter points (colored by class or accuracy)
+####################################################################
 
     plot_mollweide_scatter_points(
         lon=lon_h,
@@ -1568,38 +1571,38 @@ def main():
     # 3) Pair scatter 
     # -------------------------
 
-    # acc_npz = os.path.join(out_dir, "eval_test_event_acc.npz")
-    # if os.path.exists(acc_npz):
-    #     # use mixed_root + precomputed per-event acc cache (fast, no re-inference)
-    #     plot_pair_scatter_from_mixed_root_using_cache(
-    #         mixed_root=args.mixed_root,
-    #         out_dir=out_dir,
-    #         acc_npz_path=acc_npz,
-    #         max_files=args.pair_max_files,
-    #         alpha=0.75,
-    #         s=10.0,
-    #     )
-    # else:
-    #     print(f"[WARN] acc cache not found: {acc_npz}. Skipping pair scatter. Run evaluation_JUNO.py to produce eval_test_event_acc.npz if you want colored pair scatter.")
+    acc_npz = os.path.join(eval_dir, "eval_test_event_acc.npz")
+    if os.path.exists(acc_npz):
+        # use mixed_root + precomputed per-event acc cache (fast, no re-inference)
+        plot_pair_scatter_from_mixed_root_using_cache(
+            mixed_root=args.mixed_root,
+            out_dir=out_dir,
+            acc_npz_path=acc_npz,
+            max_files=args.pair_max_files,
+            alpha=0.75,
+            s=10.0,
+        )
+    else:
+        print(f"[WARN] acc cache not found: {acc_npz}. Skipping pair scatter. Run evaluation_JUNO.py to produce eval_test_event_acc.npz if you want colored pair scatter.")
 
-    # if os.path.exists(acc_npz):
-    #     plot_pair_accuracy_grid_from_mixed_root_using_cache(
-    #         mixed_root=args.mixed_root,
-    #         out_dir=out_dir,
-    #         acc_npz_path=acc_npz,
-    #         nx=2,
-    #         ny=2,
-    #         max_files=args.pair_max_files,
-    #     )
+    if os.path.exists(acc_npz):
+        plot_pair_accuracy_grid_from_mixed_root_using_cache(
+            mixed_root=args.mixed_root,
+            out_dir=out_dir,
+            acc_npz_path=acc_npz,
+            nx=2,
+            ny=2,
+            max_files=args.pair_max_files,
+        )
 
-    # if os.path.exists(acc_npz):
-    #     plot_pair_acc_vs_4d_distance_from_mixed_root_using_cache(
-    #         mixed_root=args.mixed_root,
-    #         out_dir=out_dir,
-    #         acc_npz_path=acc_npz,
-    #         max_files=args.pair_max_files,
-    #         vg_mm_per_ns=getattr(options, "juno_vg_mm_per_ns", 190.0),
-    #     )
+    if os.path.exists(acc_npz):
+        plot_pair_acc_vs_4d_distance_from_mixed_root_using_cache(
+            mixed_root=args.mixed_root,
+            out_dir=out_dir,
+            acc_npz_path=acc_npz,
+            max_files=args.pair_max_files,
+            vg_mm_per_ns=getattr(options, "juno_vg_mm_per_ns", 190.0),
+        )
 
 if __name__ == "__main__":
     main()

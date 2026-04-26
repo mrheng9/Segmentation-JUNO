@@ -232,7 +232,7 @@ def main():
     parser.add_argument(
         "-t", "--training_file",
         type=str,
-        default="/disk_pool1/houyh/data/scattered",
+        default="/disk_pool1/houyh/data/J23_J25_7_2/pid_dataset",
         help="JUNO dataset root dir"
     )
     parser.add_argument(
@@ -244,14 +244,14 @@ def main():
     parser.add_argument(
         "--ckpt",
         type=str,
-        default="/disk_pool1/houyh/results/Noise_run/version_2/checkpoints/last.ckpt",
+        default="/disk_pool1/houyh/results/JUNO_run/version_0/checkpoints/last.ckpt",
         help="Path to Lightning checkpoint (*.ckpt)."
     )
     # NOTE: evaluation 固定输出到 results/JUNO_run/version0
     parser.add_argument(
         "--out_dir",
         type=str,
-        default="/disk_pool1/houyh/results/Noise_run/version_2",
+        default="/home/houyh/Segmentation-JUNO-C/results/JUNO_run/version0/7",
         help="Output directory for evaluation artifacts (.npz/.txt)."
     )
     # NEW: only export a single-event npz, and use seed as the event id suffix.
@@ -264,7 +264,7 @@ def main():
     parser.add_argument("--max_batches", type=int, default=-1, help="Limit number of batches for debug.")
     parser.add_argument("--device", type=str, default="cuda", help="cuda or cpu")
     parser.add_argument("--event_idx", type=int, default=-1, help="Single event index for visualization export; -1 means random.")
-    parser.add_argument("--seed", type=int, default=279, help="RNG seed for random event selection.")
+    parser.add_argument("--seed", type=int, default=366, help="RNG seed for random event selection.")
     args = parser.parse_args()
 
     out_dir = ensure_dir(args.out_dir)
@@ -292,13 +292,13 @@ def main():
         y_prob2 = data["y_prob"]
         y_pred2 = data["y_pred_bin"]
 
-        # np.savez_compressed(
-        #     os.path.join(out_dir, "eval_full.npz"),
-        #     split=np.array([split]),
-        #     y_true_bin=y_true2.astype(np.int8),
-        #     y_pred_bin=y_pred2.astype(np.int8),
-        #     y_prob=y_prob2.astype(np.float32),
-        # )
+        np.savez_compressed(
+            os.path.join(out_dir, "eval_full.npz"),
+            split=np.array([split]),
+            y_true_bin=y_true2.astype(np.int8),
+            y_pred_bin=y_pred2.astype(np.int8),
+            y_prob=y_prob2.astype(np.float32),
+        )
 
     # Single-event inference (for Mollweide plots input)
     plot_split = "test" if getattr(model, "testing_dataset", None) is not None else "val"
@@ -331,10 +331,10 @@ def main():
         pmt_npe=ev["pmt_npe"].astype(np.float32),
     )
 
-    # if getattr(model, "testing_dataset", None) is not None:
-    #     acc_pack = run_inference_collect_test_event_accuracy(model, device=device, max_batches=args.max_batches)
-    #     np.savez_compressed(os.path.join(out_dir, "eval_test_event_acc.npz"), event_idx=acc_pack["event_idx"], acc=acc_pack["acc"])
-    #     print(f"[OK] saved per-event acc cache: {os.path.join(out_dir, 'eval_test_event_acc.npz')}")
+    if getattr(model, "testing_dataset", None) is not None:
+        acc_pack = run_inference_collect_test_event_accuracy(model, device=device, max_batches=args.max_batches)
+        np.savez_compressed(os.path.join(out_dir, "eval_test_event_acc.npz"), event_idx=acc_pack["event_idx"], acc=acc_pack["acc"])
+        print(f"[OK] saved per-event acc cache: {os.path.join(out_dir, 'eval_test_event_acc.npz')}")
         
     if args.single_only:
         print(f"[OK] single-event artifact saved to: {os.path.join(out_dir, single_name)}")
